@@ -1,12 +1,15 @@
                                            -- Data Cleaning
 -- Created database
+
 Create database marketing;
 
 -- Created a copy of raw_data
+
 create table sales
 (select * from sales_raw);
 
 -- Checking Duplicates
+
 with cte as 
 (select *,row_number() over(partition by order_number,quantity_ordered,price,sales 
     order by order_number) as rn
@@ -19,20 +22,24 @@ where rn > 1; -- No duplicates found
 
 -- Handling Null and missing values
 -- State
+
 update sales
 set state = 'Unknown'
 where state = '';
 
 -- Postal Code
+
 update sales
 set POSTAL_CODE = null
 where POSTAL_CODE = '';
 
 -- Handling Inconsistent date format
+
 update sales
 set order_date = date_format(str_to_date(order_date,'%m/%d/%Y'),'%Y/%m/%d');
 
 -- Changed Data types
+
 alter table sales
 modify ORDER_NUMBER int, 
 modify QUANTITY_ORDERED int, 
@@ -60,6 +67,7 @@ modify DEAL_SIZE varchar(50);
 
 -- How can we segment customers using RFM (Recency, Frequency, Monetary)?
 -- Identify high-value, loyal, at-risk, and new customers.
+
 with orders as 
 (select customer_name,
  max(order_date) as last_order_date,
@@ -87,6 +95,7 @@ from rfm_score
 order by rfm_segment desc;
 
 -- Who are our top 20% customers contributing to 80% of revenue?
+
 with customer_sales as
 (select customer_name,sum(sales) as Total_sales
 from sales
@@ -103,6 +112,7 @@ from ranked_customers
 where cumulative_sales_pct <= 0.8;
 
 -- Which customers are high-value but at risk of churn?
+
 with customer_orders as
 (select customer_name,sum(sales) as total_sales,
  count(distinct order_number) as frequency,
@@ -119,6 +129,7 @@ where total_sales > (select avg(sales) from sales)
 order by total_sales desc;
 
 -- Segment customers by purchase behavior (Low, Medium, High frequency
+
 with customers as
 (select customer_name,count(distinct order_number) as total_orders
 from sales
@@ -133,6 +144,7 @@ group by customer_name
 order by total_orders desc;
 
 -- Which customer segments generate the highest average order value?
+
 with customer_order_value as 
 (select customer_name,sum(sales)/count(distinct order_number) as avg_order_value
 from sales
@@ -149,6 +161,7 @@ group by Customer_segment
 order by avg_segment_aov desc;
 
 -- Identify customers with declining purchase trends
+
 with yearly_sales as
 (select customer_name,year(order_date) as sales_year,sum(sales) as current_year_sale,
    lag(sum(sales)) over(partition by customer_name order by year(order_date)) as last_year_sale
@@ -161,12 +174,14 @@ where current_year_sale < last_year_sale
  and last_year_sale is not null;
 
 -- Identify customers buying across multiple product categories.
+
 select customer_name,count(distinct product_line) as products_purchased
 from sales
 group by customer_name
 having products_purchased >= 3 ;
 
 -- Segment customers based on lifecycle stage (New, Active, Loyal)
+
 with customer_lifecycle as
 (select customer_name,min(order_date) as first_purchase_date,
   max(order_date) as last_purchase_date,
@@ -182,6 +197,7 @@ from customer_lifecycle
 order by total_orders desc;
 
 -- Which customer segments are most sensitive to discounts?
+
 select customer_name,round(avg(price),2) as avg_price,
   round(avg(sales/quantity_ordered),2) as effective_unit_price
 from sales
@@ -190,6 +206,7 @@ having avg_price < (select avg(price)
 					from sales);
 
 -- Which customer segments show early churn risk based on declining order frequency?
+
 with yearly_orders as
 (select customer_name,year(order_date) as `Year`,
   count(distinct order_number) as total_orders
@@ -209,6 +226,7 @@ where previous_year_orders is not null
 order by orders_declined desc;
 
 -- Which customer segments have high lifetime value but low product diversity (cross-sell opportunity)?
+
 with customer_value as 
 (select customer_name,sum(sales) as lifetime_value,
  count(distinct product_line) as products_purchased
@@ -222,6 +240,7 @@ where lifetime_value > (select avg(lifetime_value) from customer_value)
 order by lifetime_value desc;
 
 -- Build a final customer segmentation table
+
 create view customer_segmentation as
 (select customer_name,count(distinct order_number) as Total_orders,
   sum(sales) as Lifetime_sales,
